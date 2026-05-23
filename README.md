@@ -1,37 +1,39 @@
 # Facebook Archive Bot
 
-LINE chatbot MVP สำหรับ:
-- รับข้อความหรือ URL
-- สรุป Topic / Summary / Rewrite
-- เก็บข้อมูลลง Google Sheets (ถ้าตั้งค่าไว้)
+LINE chatbot starter for:
+- receive text from LINE
+- summarize / rewrite with Gemini
+- reply back to LINE
 
-## ไฟล์สำคัญ
-- `app.py` : FastAPI webhook
-- `sheets.py` : ตัว append ข้อมูลลง Google Sheets
-- `requirements.txt` : dependencies
-- `render.yaml` : deploy บน Render
-- `.env.example` : ตัวอย่าง environment variables
+## Files
+- `app.py` — FastAPI webhook and LINE reply
+- `requirements.txt` — dependencies
+- `render.yaml` — Render deploy config
+- `.env.example` — local environment template
 
-## ตั้งค่า Environment Variables
-ใส่ใน Render หรือ local `.env`
+## Local environment variables
+Copy `.env.example` to `.env` and fill in:
 
-- `LINE_CHANNEL_SECRET`
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL` (optional)
-- `SHEETS_SPREADSHEET_ID` (optional)
-- `GOOGLE_SERVICE_ACCOUNT_JSON` (optional)
-
-## รันบนเครื่องตัวเอง
-```bash
-pip install -r requirements.txt
-uvicorn app:app --reload
+```env
+LINE_CHANNEL_SECRET=
+LINE_CHANNEL_ACCESS_TOKEN=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
-## ทดสอบ
-- เปิด `http://127.0.0.1:8000/`
-- ควรเห็นข้อความว่า bot is running
+Optional later:
+```env
+SHEETS_SPREADSHEET_ID=
+GOOGLE_SERVICE_ACCOUNT_JSON=
+```
 
-## หมายเหตุ
-- V1 นี้ไม่ได้ดึงรูปภาพ
-- ถ้า URL อ่านไม่ได้ ระบบจะยังพยายามตอบจากข้อความที่ส่งเข้ามา
+## Deploy to Render
+1. Push this repo to GitHub
+2. Create a new Web Service on Render from that repo
+3. Set environment variables in Render
+4. Render will use `render.yaml`
+
+## Notes
+- This version does **not** collect images.
+- Google Sheets is reserved for the next version.
+- If `GEMINI_API_KEY` is missing, the bot returns a demo message.

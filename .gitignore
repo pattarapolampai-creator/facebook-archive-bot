@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
 .env
-archive_fallback.csv
+.venv/
+venv/
 .DS_Store
+.pytest_cache/
+.mypy_cache/

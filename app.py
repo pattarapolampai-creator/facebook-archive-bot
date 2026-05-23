@@ -1,109 +1,125 @@
 import os
+import logging
+
 from fastapi import FastAPI, Request
-
-from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import (
-    Configuration,
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage
-)
-
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
 import google.generativeai as genai
 
-# =========================
-# ENV VARIABLES
-# =========================
-
-LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# =========================
-# GEMINI SETUP
-# =========================
-
-genai.configure(api_key=GEMINI_API_KEY)
-
-model = genai.GenerativeModel("gemini-2.0-flash")
-
-# =========================
-# LINE SETUP
-# =========================
-
-configuration = Configuration(
-    access_token=LINE_CHANNEL_ACCESS_TOKEN
+from linebot.v3.webhook import WebhookHandler
+from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
+load_dotenv()
 
-# =========================
-# FASTAPI
-# =========================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("facebook-archive-bot")
 
-app = FastAPI()
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+app = FastAPI(title="Facebook Archive Bot")
+
+configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN or None)
+handler = WebhookHandler(LINE_CHANNEL_SECRET or "")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(GEMINI_MODEL)
+else:
+    model = None
+
 
 @app.get("/")
 def home():
-    return {"message": "Facebook Archive Bot is running"}
+    return {"message": "Facebook Archive Bot is running", "status": "ok"}
 
-@app.post("/webhook")
-async def webhook(request: Request):
 
-    signature = request.headers.get("X-Line-Signature")
+def build_prompt(user_text: str) -> str:
+    return f"""You are a helpful assistant for a LINE chatbot named Facebook Archive.
 
-    body = await request.body()
-    body_text = body.decode()
+Task:
+- Analyze the input text
+- Return exactly 3 sections:
+  1. Topic
+  2. Summary
+  3. Rewrite
 
-    handler.handle(body_text, signature)
+Rules:
+- Keep the Topic short.
+- Keep the Summary concise and clear.
+- Rewrite the content in clean, readable English.
+- Do not add any extra sections.
 
-    return "OK"
-
-# =========================
-# MESSAGE EVENT
-# =========================
-
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_message(event):
-
-    user_text = event.message.text
-
-    prompt = f"""
-You are an AI assistant.
-
-Analyze this content carefully.
-
-Return in this format:
-
-📌 Topic:
-(short topic)
-
-💡 Summary:
-(short summary)
-
-✍️ Rewrite:
-(clean rewritten version)
-
-Content:
+Input:
 {user_text}
 """
 
-    response = model.generate_content(prompt)
 
-    ai_reply = response.text
+def generate_reply(user_text: str) -> str:
+    if model is None:
+        return (
+            "📌 Topic: Demo Mode\n"
+            "💡 Summary: GEMINI_API_KEY is not set yet.\n"
+            "✍️ Rewrite: Please add your Gemini API key in Render Environment Variables."
+        )
+
+    try:
+        response = model.generate_content(build_prompt(user_text))
+        text = getattr(response, "text", None)
+        if text and text.strip():
+            return text.strip()
+    except Exception as exc:
+        logger.exception("Gemini generation failed: %s", exc)
+
+    return (
+        "📌 Topic: Error\n"
+        "💡 Summary: I could not generate a response right now.\n"
+        "✍️ Rewrite: Please check the Render logs and environment variables."
+    )
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    signature = request.headers.get("X-Line-Signature", "")
+    body = await request.body()
+    body_text = body.decode("utf-8")
+
+    try:
+        handler.handle(body_text, signature)
+    except Exception as exc:
+        logger.exception("LINE webhook handling failed: %s", exc)
+        return JSONResponse(
+            status_code=400,
+            content={"status": "bad request", "detail": "Invalid LINE signature or payload"},
+        )
+
+    return {"status": "ok"}
+
+
+@handler.add(MessageEvent, message=TextMessageContent)
+def handle_text_message(event: MessageEvent):
+    user_text = event.message.text
+    reply_text = generate_reply(user_text)
+
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        logger.error("LINE_CHANNEL_ACCESS_TOKEN is missing")
+        return
 
     with ApiClient(configuration) as api_client:
-
         line_bot_api = MessagingApi(api_client)
-
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[
-                    TextMessage(text=ai_reply)
-                ]
+                messages=[TextMessage(text=reply_text)],
             )
         )
