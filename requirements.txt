@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+requests
+python-dotenv
+google-genai
+beautifulsoup4
+gspread
+google-auth

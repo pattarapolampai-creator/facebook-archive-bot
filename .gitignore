@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.env
+archive_fallback.csv
+.DS_Store
