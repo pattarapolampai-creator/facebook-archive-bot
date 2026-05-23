@@ -2,7 +2,7 @@
 
 LINE chatbot starter for:
 - receive text from LINE
-- summarize / rewrite with Gemini
+- summarize / rewrite with Gemini 3.1 Flash-Lite
 - reply back to LINE
 
 ## Files
@@ -18,7 +18,7 @@ Copy `.env.example` to `.env` and fill in:
 LINE_CHANNEL_SECRET=
 LINE_CHANNEL_ACCESS_TOKEN=
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
 Optional later:
